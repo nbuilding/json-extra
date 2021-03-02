@@ -1,0 +1,25 @@
+// Currently there's a bug where you can't use parentheses after return
+let pub identity = [[t] value: t] -> t {
+	return value
+}
+
+let pub getError = [[t, e] result: result[t, e]] -> list[e] {
+	return if let <err error> = result {
+		[error]
+	} else {
+		[]
+	}
+}
+
+let pub getErrors = [[t, e] results: list[result[t, e]]] -> list[e] {
+	return filterMap(
+		[result: result[t, e]] -> maybe[e] {
+			return if let <err error> = result {
+				yes(error)
+			} else {
+				none
+			}
+		},
+		results
+	)
+}

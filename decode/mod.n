@@ -1,9 +1,9 @@
 import json
 
+let utils = imp "../utils.n"
 let decodeError = imp "./error.n"
 
 alias pub error = decodeError.error
-
 let failure = decodeError.failure
 
 /// A value that knows how to decode `JSON.value` values.
@@ -27,6 +27,22 @@ let pub bool: decoder[bool] = [value: json.value] -> result[bool, error] {
 	}
 }
 
+/// Decode a JSON string into an N `int`.
+let pub int: decoder[int] = [value: json.value] -> result[int, error] {
+	if let <number number> = value {
+		// HACK: Cast the float back to an int with `round` then back to a float by
+		// exponentiation.
+		let int: int = round(number)
+		if number = int ^ 1 {
+			ok(int)
+		} else {
+			return err(failure("Expected an integer value.", value))
+		}
+	} else {
+		return err(failure("Expected an integer value.", value))
+	}
+}
+
 /// Decode a JSON string into an N `float`.
 let pub float: decoder[float] = [value: json.value] -> result[float, error] {
 	return if let <number float> = value {
@@ -35,6 +51,12 @@ let pub float: decoder[float] = [value: json.value] -> result[float, error] {
 		err(failure("Expected a float value.", value))
 	}
 }
+
+// TODO: nullable
+// TODO: list
+// TODO: dict
+// TODO: keyValuePairs
+// TODO: oneOrMore
 
 /// Decode a value from a specific property from a JSON object.
 let pub field = [[t] key: str decoder: decoder[t] value: json.value] -> result[t, error] {
@@ -54,19 +76,73 @@ let pub field = [[t] key: str decoder: decoder[t] value: json.value] -> result[t
 	}
 }
 
+// TODO: at
+
+/// Decode a value from a specific property from a JSON object.
+let pub index = [[t] index: int decoder: decoder[t] value: json.value] -> result[t, error] {
+	if let <array list> = value {
+		if let <yes value> = itemAt(index, list) {
+			let decoded = decoder(value)
+			return if let <err error> = decoded {
+				err(decodeError.index(index, error))
+			} else {
+				decoded
+			}
+		} else {
+			return err(failure("Expected item " + intInBase10(index) + ".", value))
+		}
+	} else {
+		return err(failure("Expected a JSON array.", value))
+	}
+}
+
+// TODO: maybe
+// TODO: oneOf
+
 /// Parse the given string into a JSON value and then run the decoder on it.
 /// This will fail if the string is invalid JSON or if the decoder fails.
 let pub decodeString = [[t] decoder: decoder[t] jsonStr: str] -> result[t, error] {
 	if let <yes value> = json.parseSafe(jsonStr) {
 		return decoder(value)
 	} else {
-		return err(failure("Invalid JSON syntax.", json.string(jsonStr)))
+		return jsonStr
+			|> json.string
+			|> failure("Invalid JSON syntax.")
+			|> err
 	}
 }
 
 /// Run a decoder on a `json.value`.
 let pub decodeValue = [[t] decoder: decoder[t] value: json.value] -> result[t, error] {
 	return decoder(value)
+}
+
+let E = utils.getError
+
+/// Transform the output type of a decoder. Perhaps you only want the length of
+/// a string:
+///
+/// ```n
+/// let decodeStringLength: decoder[int] =
+/// 	map(len, str)
+/// ```
+let pub map: [a, t] (a -> t) -> decoder[a] -> decoder[t] = [
+	[a, t]
+	mapFn: a -> t
+	decoder: decoder[a]
+	value: json.value
+] -> result[t, error] {
+	let result = decoder(value)
+
+	return if let <ok decoded> = result {
+		ok(mapFn(decoded))
+	} else {
+		// Unfortunately I can't just return result
+		// result
+		E(result)
+			|> decodeError.oneOf
+			|> err
+	}
 }
 
 /// Tries using two decoders and combines them with the given map function into
@@ -103,13 +179,10 @@ let pub map2:
 		return ok(mapFn(a, b))
 	} else {
 		let (resultA, resultB) = results
-
-		return err(
-			decodeError.oneOf(
-				(if let <err error> = resultA { [error] } else { [] })
-					+ (if let <err error> = resultB { [error] } else { [] })
-			)
-		)
+		let error = (E(resultA) + E(resultB))
+			|> decodeError.oneOf
+			|> err
+		return error
 	}
 }
 
@@ -150,13 +223,71 @@ let pub map3:
 		return ok(mapFn(a, b, c))
 	} else {
 		let (resultA, resultB, resultC) = results
+		let error = (E(resultA) + E(resultB) + E(resultC))
+			|> decodeError.oneOf
+			|> err
+		return error
+	}
+}
 
-		return err(
-			decodeError.oneOf(
-				(if let <err error> = resultA { [error] } else { [] })
-					+ (if let <err error> = resultB { [error] } else { [] })
-					+ (if let <err error> = resultC { [error] } else { [] })
-			)
+let pub map4 = [
+	[a, b, c, d, t]
+	mapFn: a -> b -> c -> d -> t
+	decoderA: decoder[a]
+	decoderB: decoder[b]
+	decoderC: decoder[c]
+	decoderD: decoder[d]
+	value: json.value
+] -> result[t, error] {
+	let results = (
+		decoderA(value),
+		decoderB(value),
+		decoderC(value),
+		decoderD(value)
+	)
+
+	if let <ok a>, <ok b>, <ok c>, <ok d> = results {
+		return ok(mapFn(a, b, c, d))
+	} else {
+		let (resultA, resultB, resultC, resultD) = results
+		let error = (E(resultA) + E(resultB) + E(resultC) + E(resultD))
+			|> decodeError.oneOf
+			|> err
+		return error
+	}
+}
+
+let pub map5 = [
+	[a, b, c, d, e, t]
+	mapFn: a -> b -> c -> d -> e -> t
+	decoderA: decoder[a]
+	decoderB: decoder[b]
+	decoderC: decoder[c]
+	decoderD: decoder[d]
+	decoderE: decoder[e]
+	value: json.value
+] -> result[t, error] {
+	let results = (
+		decoderA(value),
+		decoderB(value),
+		decoderC(value),
+		decoderD(value),
+		decoderE(value)
+	)
+
+	if let <ok a>, <ok b>, <ok c>, <ok d>, <ok e> = results {
+		return ok(mapFn(a, b, c, d, e))
+	} else {
+		let (resultA, resultB, resultC, resultD, resultE) = results
+		let error = (
+			E(resultA)
+				+ E(resultB)
+				+ E(resultC)
+				+ E(resultD)
+				+ E(resultE)
 		)
+			|> decodeError.oneOf
+			|> err
+		return error
 	}
 }

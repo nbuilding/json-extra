@@ -1,0 +1,65 @@
+import json
+
+/// A decoding error type that describes precisely how an error happened. This
+/// can be used to make more elaborate visualizations of a decoding error. For
+/// example, you could show a preview of the JSON object and highlight the
+/// invalid parts in red.
+type pub error = <field str error>
+	| <index int error>
+	| <oneOf list[error]>
+	| <failure str json.value>
+
+/// A value that knows how to decode `JSON.value` values.
+alias pub decoder[t] = json.value -> result[t, error]
+
+/// Decode a JSON string into an N `str`.
+let pub str: decoder[str] = [value: json.value] -> result[str, error] {
+	return if let <string string> = value {
+		ok(string)
+	} else {
+		err(failure("Expected a string value.", value))
+	}
+}
+
+/// Tries using three decoders and combines them with the given map function
+/// into a single value of your choosing.
+///
+/// For example,
+/// ```n
+/// alias person = { name: str; age: int; height: float }
+///
+/// let decodePerson: decoder[person] =
+///   map3(
+///     person,
+///     ...
+///   )
+/// ```
+let pub map3:
+	[a, b, c, t]
+	(a -> b -> c -> t)
+	-> decoder[a]
+	-> decoder[b]
+	-> deocder[c]
+	-> decoder[t]
+= [
+	[a, b, c, t]
+	mapFn: a -> b -> c -> t
+	decoderA: decoder[a]
+	decoderB: decoder[b]
+	decoderC: decoder[c]
+	value: json.value
+] -> result[t, error] {
+	let results = (decoderA(value), decoderB(value), decoderC(value))
+
+	return if let <ok a>, <ok b>, <ok c> = results {
+		mapFn(a, b, c)
+	} else {
+		let resultA, resultB, resultC = results
+
+		oneOf(
+			if let <err error> = resultA { [error] } else { [] }
+				+ if let <err error> = resultB { [error] } else { [] }
+				+ if let <err error> = resultC { [error] } else { [] }
+		)
+	}
+}

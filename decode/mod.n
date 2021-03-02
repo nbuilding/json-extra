@@ -1,13 +1,10 @@
 import json
 
-/// A decoding error type that describes precisely how an error happened. This
-/// can be used to make more elaborate visualizations of a decoding error. For
-/// example, you could show a preview of the JSON object and highlight the
-/// invalid parts in red.
-type pub error = <field str error>
-	| <index int error>
-	| <oneOf list[error]>
-	| <failure str json.value>
+let decodeError = imp "./error.n"
+
+alias pub error = decodeError.error
+
+let failure = decodeError.failure
 
 /// A value that knows how to decode `JSON.value` values.
 alias pub decoder[t] = json.value -> result[t, error]
@@ -39,13 +36,80 @@ let pub float: decoder[float] = [value: json.value] -> result[float, error] {
 	}
 }
 
+/// Decode a value from a specific property from a JSON object.
+let pub field = [[t] key: str decoder: decoder[t] value: json.value] -> result[t, error] {
+	if let <object map> = value {
+		if let <yes value> = getValue(key, map) {
+			let decoded = decoder(value)
+			return if let <err error> = decoded {
+				err(decodeError.field(key, error))
+			} else {
+				decoded
+			}
+		} else {
+			return err(failure("Expected the property `" + key + "`.", value))
+		}
+	} else {
+		return err(failure("Expected a JSON object.", value))
+	}
+}
+
 /// Parse the given string into a JSON value and then run the decoder on it.
 /// This will fail if the string is invalid JSON or if the decoder fails.
 let pub decodeString = [[t] decoder: decoder[t] jsonStr: str] -> result[t, error] {
-	if let <yes jsonVal> = json.parseSafe(jsonStr) {
-		return decoder(jsonVal)
+	if let <yes value> = json.parseSafe(jsonStr) {
+		return decoder(value)
 	} else {
 		return err(failure("Invalid JSON syntax.", json.string(jsonStr)))
+	}
+}
+
+/// Run a decoder on a `json.value`.
+let pub decodeValue = [[t] decoder: decoder[t] value: json.value] -> result[t, error] {
+	return decoder(value)
+}
+
+/// Tries using two decoders and combines them with the given map function into
+/// a single value of your choosing.
+///
+/// For example,
+///
+/// ```n
+/// alias point = { x: float, y: float }
+///
+/// let decodePoint: decoder[point] =
+/// 	map2(
+/// 		point,
+/// 		field("x", float),
+/// 		field("y", float),
+/// 	)
+/// ```
+let pub map2:
+	[a, b, t]
+	(a -> b -> t)
+	-> decoder[a]
+	-> decoder[b]
+	-> decoder[t]
+= [
+	[a, b, t]
+	mapFn: a -> b -> t
+	decoderA: decoder[a]
+	decoderB: decoder[b]
+	value: json.value
+] -> result[t, error] {
+	let results = (decoderA(value), decoderB(value))
+
+	if let <ok a>, <ok b> = results {
+		return ok(mapFn(a, b))
+	} else {
+		let (resultA, resultB) = results
+
+		return err(
+			decodeError.oneOf(
+				(if let <err error> = resultA { [error] } else { [] })
+					+ (if let <err error> = resultB { [error] } else { [] })
+			)
+		)
 	}
 }
 
@@ -53,6 +117,7 @@ let pub decodeString = [[t] decoder: decoder[t] jsonStr: str] -> result[t, error
 /// into a single value of your choosing.
 ///
 /// For example,
+///
 /// ```n
 /// alias person = { name: str; age: int; height: float }
 ///
@@ -87,7 +152,7 @@ let pub map3:
 		let (resultA, resultB, resultC) = results
 
 		return err(
-			oneOf(
+			decodeError.oneOf(
 				(if let <err error> = resultA { [error] } else { [] })
 					+ (if let <err error> = resultB { [error] } else { [] })
 					+ (if let <err error> = resultC { [error] } else { [] })

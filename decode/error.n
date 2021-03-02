@@ -1,0 +1,10 @@
+import json
+
+/// A decoding error type that describes precisely how an error happened. This
+/// can be used to make more elaborate visualizations of a decoding error. For
+/// example, you could show a preview of the JSON object and highlight the
+/// invalid parts in red.
+type pub error = pub <field str error>
+	| pub <index int error>
+	| pub <oneOf list[error]>
+	| pub <failure str json.value>

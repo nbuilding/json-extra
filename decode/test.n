@@ -1,3 +1,12 @@
 let D = imp "./mod.n"
 
-print(D.decodeString(D.float, "4"))
+alias person = { name: str; height: float }
+
+let personDecoder = D.map2(
+	person,
+	D.field("name", D.str),
+	D.field("height", D.float)
+)
+
+print(D.decodeString(personDecoder, "{ \"name\": \"Billy\", \"age\": 18 }"))
+print(D.decodeString(personDecoder, "{ \"name\": \"Billy\", \"height\": 18 }"))

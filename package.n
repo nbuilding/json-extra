@@ -3,3 +3,5 @@ let pub name = "jsonExtra"
 let pub version = "0.1.0"
 
 let pub authors = ["nbuilding"]
+
+let pub description = "An N port of Elm's Json package."

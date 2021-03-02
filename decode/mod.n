@@ -21,6 +21,34 @@ let pub str: decoder[str] = [value: json.value] -> result[str, error] {
 	}
 }
 
+/// Decode a JSON string into an N `bool`.
+let pub bool: decoder[bool] = [value: json.value] -> result[bool, error] {
+	return if let <boolean bool> = value {
+		ok(bool)
+	} else {
+		err(failure("Expected a boolean value.", value))
+	}
+}
+
+/// Decode a JSON string into an N `float`.
+let pub float: decoder[float] = [value: json.value] -> result[float, error] {
+	return if let <number float> = value {
+		ok(float)
+	} else {
+		err(failure("Expected a float value.", value))
+	}
+}
+
+/// Parse the given string into a JSON value and then run the decoder on it.
+/// This will fail if the string is invalid JSON or if the decoder fails.
+let pub decodeString = [[t] decoder: decoder[t] jsonStr: str] -> result[t, error] {
+	if let <yes jsonVal> = json.parseSafe(jsonStr) {
+		return decoder(jsonVal)
+	} else {
+		return err(failure("Invalid JSON syntax.", json.string(jsonStr)))
+	}
+}
+
 /// Tries using three decoders and combines them with the given map function
 /// into a single value of your choosing.
 ///
@@ -29,17 +57,19 @@ let pub str: decoder[str] = [value: json.value] -> result[str, error] {
 /// alias person = { name: str; age: int; height: float }
 ///
 /// let decodePerson: decoder[person] =
-///   map3(
-///     person,
-///     ...
-///   )
+/// 	map3(
+/// 		person,
+/// 		field("name", str),
+/// 		at(["info", "age"], int),
+/// 		at(["info", "height"], float),
+/// 	)
 /// ```
 let pub map3:
 	[a, b, c, t]
 	(a -> b -> c -> t)
 	-> decoder[a]
 	-> decoder[b]
-	-> deocder[c]
+	-> decoder[c]
 	-> decoder[t]
 = [
 	[a, b, c, t]
@@ -51,15 +81,17 @@ let pub map3:
 ] -> result[t, error] {
 	let results = (decoderA(value), decoderB(value), decoderC(value))
 
-	return if let <ok a>, <ok b>, <ok c> = results {
-		mapFn(a, b, c)
+	if let <ok a>, <ok b>, <ok c> = results {
+		return ok(mapFn(a, b, c))
 	} else {
-		let resultA, resultB, resultC = results
+		let (resultA, resultB, resultC) = results
 
-		oneOf(
-			if let <err error> = resultA { [error] } else { [] }
-				+ if let <err error> = resultB { [error] } else { [] }
-				+ if let <err error> = resultC { [error] } else { [] }
+		return err(
+			oneOf(
+				(if let <err error> = resultA { [error] } else { [] })
+					+ (if let <err error> = resultB { [error] } else { [] })
+					+ (if let <err error> = resultC { [error] } else { [] })
+			)
 		)
 	}
 }

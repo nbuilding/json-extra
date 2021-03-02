@@ -1,1 +1,3 @@
 let D = imp "./mod.n"
+
+print(D.decodeString(D.float, "4"))

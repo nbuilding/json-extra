@@ -34,7 +34,7 @@ let pub int: decoder[int] = [value: json.value] -> result[int, error] {
 		// exponentiation.
 		let int: int = round(number)
 		if number = int ^ 1 {
-			ok(int)
+			return ok(int)
 		} else {
 			return err(failure("Expected an integer value.", value))
 		}
@@ -52,7 +52,22 @@ let pub float: decoder[float] = [value: json.value] -> result[float, error] {
 	}
 }
 
-// TODO: nullable
+// Decode a value that may be null into an N `maybe`.
+let pub nullable = [[t] decoder: decoder[t] value: json.value] -> result[maybe[t], error] {
+	if value = json.null {
+		return ok(none)
+	} else {
+		let result = decoder(value)
+		return if let <ok decoded> = result {
+			ok(yes(decoded))
+		} else {
+			// TEMP: needs match
+			// result
+			err(decodeError.oneOf([]))
+		}
+	}
+}
+
 // TODO: list
 // TODO: dict
 // TODO: keyValuePairs
@@ -96,8 +111,56 @@ let pub index = [[t] index: int decoder: decoder[t] value: json.value] -> result
 	}
 }
 
-// TODO: maybe
-// TODO: oneOf
+/// Deals with optional fields. Examples:
+///
+/// ```n
+/// let json = "{ \"name\": \"Billy\", \"age\": 18 }"
+///
+/// decodeString(maybe(field("age", int)), json) = ok(yes(18))
+/// decodeString(maybe(field("name", int)), json) = ok(none)
+/// decodeString(maybe(field("height", float)), json) = ok(none)
+///
+/// decodeString(field("age", maybe(float)), json) = ok(none)
+/// ```
+let pub maybe = [
+	[t]
+	decoder: decoder[t]
+	value: json.value
+] -> result[maybe[t], error] {
+	if let <ok decoded> = decoder(value) {
+		ok(yes(decoded))
+	} else {
+		ok(none)
+	}
+}
+
+/// Tries several decoders until one works.
+let pub oneOf = [[t] decoders: list[decoder[t]] value: json.value] -> result[t, error] {
+	let results = filterMap(
+		[decoder: decoder[t]] -> maybe[result[t, error]] {
+			return yes(decoder(value))
+		},
+		decoders
+	)
+	for (result in results) {
+		if let <ok decoded> = result {
+			return ok(decoded)
+		}
+	}
+	let errors = (filterMap(
+		[result: result[t, error]] -> maybe[error] {
+			return if let <err error> = result {
+				yes(error)
+			} else {
+				none
+			}
+		},
+		results
+	))
+		|> decodeError.oneOf
+		|> err
+	return errors
+}
 
 /// Parse the given string into a JSON value and then run the decoder on it.
 /// This will fail if the string is invalid JSON or if the decoder fails.
@@ -291,3 +354,159 @@ let pub map5 = [
 		return error
 	}
 }
+
+let pub map6 = [
+	[a, b, c, d, e, f, t]
+	mapFn: a -> b -> c -> d -> e -> f -> t
+	decoderA: decoder[a]
+	decoderB: decoder[b]
+	decoderC: decoder[c]
+	decoderD: decoder[d]
+	decoderE: decoder[e]
+	decoderF: decoder[f]
+	value: json.value
+] -> result[t, error] {
+	let results = (
+		decoderA(value),
+		decoderB(value),
+		decoderC(value),
+		decoderD(value),
+		decoderE(value),
+		decoderF(value)
+	)
+
+	if let <ok a>, <ok b>, <ok c>, <ok d>, <ok e>, <ok f> = results {
+		return ok(mapFn(a, b, c, d, e, f))
+	} else {
+		let (resultA, resultB, resultC, resultD, resultE, resultF) = results
+		let error = (
+			E(resultA)
+				+ E(resultB)
+				+ E(resultC)
+				+ E(resultD)
+				+ E(resultE)
+				+ E(resultF)
+		)
+			|> decodeError.oneOf
+			|> err
+		return error
+	}
+}
+
+let pub map7 = [
+	[a, b, c, d, e, f, g, t]
+	mapFn: a -> b -> c -> d -> e -> f -> g -> t
+	decoderA: decoder[a]
+	decoderB: decoder[b]
+	decoderC: decoder[c]
+	decoderD: decoder[d]
+	decoderE: decoder[e]
+	decoderF: decoder[f]
+	decoderG: decoder[g]
+	value: json.value
+] -> result[t, error] {
+	let results = (
+		decoderA(value),
+		decoderB(value),
+		decoderC(value),
+		decoderD(value),
+		decoderE(value),
+		decoderF(value),
+		decoderG(value)
+	)
+
+	if let <ok a>, <ok b>, <ok c>, <ok d>, <ok e>, <ok f>, <ok g> = results {
+		return ok(mapFn(a, b, c, d, e, f, g))
+	} else {
+		let (
+			resultA,
+			resultB,
+			resultC,
+			resultD,
+			resultE,
+			resultF,
+			resultG
+		) = results
+		let error = (
+			E(resultA)
+				+ E(resultB)
+				+ E(resultC)
+				+ E(resultD)
+				+ E(resultE)
+				+ E(resultF)
+				+ E(resultG)
+		)
+			|> decodeError.oneOf
+			|> err
+		return error
+	}
+}
+
+let pub map8 = [
+	[a, b, c, d, e, f, g, h, t]
+	mapFn: a -> b -> c -> d -> e -> f -> g -> h -> t
+	decoderA: decoder[a]
+	decoderB: decoder[b]
+	decoderC: decoder[c]
+	decoderD: decoder[d]
+	decoderE: decoder[e]
+	decoderF: decoder[f]
+	decoderG: decoder[g]
+	decoderH: decoder[h]
+	value: json.value
+] -> result[t, error] {
+	let results = (
+		decoderA(value),
+		decoderB(value),
+		decoderC(value),
+		decoderD(value),
+		decoderE(value),
+		decoderF(value),
+		decoderG(value),
+		decoderH(value)
+	)
+
+	if let (
+		<ok a>,
+		<ok b>,
+		<ok c>,
+		<ok d>,
+		<ok e>,
+		<ok f>,
+		<ok g>,
+		<ok h>
+	) = results {
+		return ok(mapFn(a, b, c, d, e, f, g, h))
+	} else {
+		let (
+			resultA,
+			resultB,
+			resultC,
+			resultD,
+			resultE,
+			resultF,
+			resultG,
+			resultH
+		) = results
+		let error = (
+			E(resultA)
+				+ E(resultB)
+				+ E(resultC)
+				+ E(resultD)
+				+ E(resultE)
+				+ E(resultF)
+				+ E(resultG)
+				+ E(resultH)
+		)
+			|> decodeError.oneOf
+			|> err
+		return error
+	}
+}
+
+// TODO: lazy
+// TODO: value
+// TODO: null
+// TODO: succeed
+// TODO: fail
+// TODO: andThen

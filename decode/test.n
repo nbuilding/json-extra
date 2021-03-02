@@ -1,12 +1,65 @@
 let D = imp "./mod.n"
+let utils = imp "../utils.n"
+let id = utils.identity
 
-alias person = { name: str; height: float }
+let isErr = [[o, e] result: result[o, e]] -> bool {
+	return if let <err _> = result {
+		true
+	} else {
+		false
+	}
+}
 
-let personDecoder = D.map2(
-	person,
-	D.field("name", D.str),
-	D.field("height", D.float)
-)
+let assert = [name: str shouldBeTrue: bool] -> () {
+	if not shouldBeTrue {
+		print("Test failed: " + name)
+	}
+}
 
-print(D.decodeString(personDecoder, "{ \"name\": \"Billy\", \"age\": 18 }"))
-print(D.decodeString(personDecoder, "{ \"name\": \"Billy\", \"height\": 18 }"))
+print("Begin tests.")
+
+D.decodeString(D.str, "true") |> isErr
+	|> assert("D.str fail on bool")
+D.decodeString(D.str, "42") |> isErr
+	|> assert("D.str fail on int")
+D.decodeString(D.str, "3.14") |> isErr
+	|> assert("D.str fail on float")
+id(D.decodeString(D.str, "\"hello\"") = ok("hello"))
+	|> assert("D.str succeed on str")
+D.decodeString(D.str, "{ \"hello\": 42 }") |> isErr
+	|> assert("D.str fail on obj")
+
+id(D.decodeString(D.bool, "true") = ok(true))
+	|> assert("D.bool succeed on bool")
+D.decodeString(D.bool, "42") |> isErr
+	|> assert("D.bool fail on int")
+D.decodeString(D.bool, "3.14") |> isErr
+	|> assert("D.bool fail on float")
+D.decodeString(D.bool, "\"hello\"") |> isErr
+	|> assert("D.bool fail on str")
+D.decodeString(D.bool, "{ \"hello\": 42 }") |> isErr
+	|> assert("D.bool fail on obj")
+
+D.decodeString(D.int, "true") |> isErr
+	|> assert("D.int fail on bool")
+id(D.decodeString(D.int, "42") = ok(42))
+	|> assert("D.int succeed on int")
+D.decodeString(D.int, "3.14") |> isErr
+	|> assert("D.int fail on float")
+D.decodeString(D.int, "\"hello\"") |> isErr
+	|> assert("D.int fail on str")
+D.decodeString(D.int, "{ \"hello\": 42 }") |> isErr
+	|> assert("D.int fail on obj")
+
+D.decodeString(D.float, "true") |> isErr
+	|> assert("D.float fail on bool")
+id(D.decodeString(D.float, "42") = ok(42.0))
+	|> assert("D.float succeed on int float")
+id(D.decodeString(D.float, "3.14") = ok(3.14))
+	|> assert("D.float succeed on float")
+D.decodeString(D.float, "\"hello\"") |> isErr
+	|> assert("D.float fail on str")
+D.decodeString(D.float, "{ \"hello\": 42 }") |> isErr
+	|> assert("D.float fail on obj")
+
+print("Tests done.")
